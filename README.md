@@ -1,88 +1,66 @@
-# Barniz Express
+# Sistema de Facturación Electrónica DIAN (Colombia)
+## Taller: Patrones Estructurales y Decorativos
 
-Shipping quote service for handcrafted **Barniz de Pasto** pieces (mopa-mopa lacquer, Pasto, Colombia).
-University project for the Software Patterns course, built around the **Decorator** pattern.
+El desarrollo de este sistema resuelve uno de los retos más complejos en el software financiero: la adaptabilidad a reglas tributarias heterogéneas y en constante evolución. Utilizando un objeto base () acoplado a Decoradores Complejos, el sistema permite ensamblar de forma dinámica y en tiempo de ejecución comportamientos fiscales avanzados (como IVA, ICA, retenciones en la fuente, descuentos, notas de ajuste, firma digital y validación previa ante la DIAN) sin alterar el núcleo de la lógica de negocio.
 
-**Authors:** Nicolas Casanova (backend), Samuel Vallejo (frontend).
+Objeto base: Factura básica
+Decoradores complejos:
+Con retención en la fuente
+Con IVA / ICA
+Con descuento comercial
+Con nota crédito / nota débito
+Con firma digital (XML firmado)
+Con envío automático a la DIAN
+Con copia de correo al cliente
 
-## The idea
+Por qué es complejo: Combina reglas tributarias, validaciones y múltiples capas de comportamiento que cambian según el tipo de cliente y régimen.
 
-A piece is shipped as a base `Shipment`. Every shipping option WRAPS the shipment in one more layer, the way a
-Russian doll or a gift box does. Each layer adds its own cost, description and notes. The pattern lets us combine
-any options in any subset without inheritance and without a giant `if` block.
+Frontend: Formulario de facturación donde se activan/desactivan las capas y se genera el XML/PDF en tiempo real.
 
-```mermaid
-classDiagram
-    class Shipment {
-        <<interface>>
-        +baseCostCop() long
-        +totalCostCop() long
-        +layers() List~Layer~
-        +description() String
-    }
-    class BaseShipment
-    class ShipmentDecorator {
-        <<abstract>>
-        #inner Shipment
-    }
-    Shipment <|.. BaseShipment
-    Shipment <|.. ShipmentDecorator
-    ShipmentDecorator o-- Shipment : wraps
-    ShipmentDecorator <|-- FragilePackagingDecorator
-    ShipmentDecorator <|-- InsuranceDecorator
-    ShipmentDecorator <|-- CustomsDecorator
-    ShipmentDecorator <|-- GiftWrapDecorator
-    ShipmentDecorator <|-- ExpressDecorator
-```
+### Nombres: Equipo de Desarrollo:
 
-## Decorators created
+Cristian Santiago Parra (Líder de Proyecto)
 
-Wrapping order, innermost to outermost: `BaseShipment -> FRAGILE -> INSURANCE -> CUSTOMS -> GIFT -> EXPRESS`.
+William Chavez Bravo (Desarrollador / Arquitecto)
 
-| Decorator | Adds | Rule |
-|---|---|---|
-| `FragilePackagingDecorator` | foam lining, double-wall box | +18,000 COP |
-| `InsuranceDecorator` | coverage of the declared value | 2% of declared value, min 5,000 COP |
-| `CustomsDecorator` | DIAN export declaration, commercial invoice | +60,000 COP, international only |
-| `GiftWrapDecorator` | wrapping and a card | +9,000 COP, message required, max 140 chars |
-| `ExpressDecorator` | 1-2 business days | +35% of everything inside it |
+Oscar Felipe Hernandez (Desarrollador / Diseñador)
 
-`ExpressDecorator` is deliberately order-dependent: it charges 35% of the accumulated total of the layers under it,
-which shows why the wrapping order matters in this pattern. `CUSTOMS` and `EXPRESS` are incompatible.
+## Módulos Funcionales, de diseño y normativos.
 
-Custom annotation decorators (Spring AOP and Bean Validation): `@AuditedQuote`, `@ValidGiftMessage`, `@SafeText`.
+### 1. Marco Legal y Normativo de Referencia (Colombia)
+El sistema debe cumplir de forma rigurosa con:
+- **Estatuto Tributario (E.T.):** Artículo 616-1 (Obligación de facturar, validación previa y requisitos de la factura y documentos electrónicos).
+- **Resolución DIAN Vigente:** Resolución 000165 de 2023 (y sus modificaciones técnicas), que regula los anexos técnicos de facturación electrónica, notas crédito, notas débito y validación previa.
+- **Decreto Único Reglamentario (DUR):** Decreto 1625 de 2016 en materia fiscal y tributaria.
 
-Base cost: `12,000 + 6,000 * weightKg`, plus `45,000` for international destinations.
+### 2. Stack Tecnológico y Arquitectura
+- **Backend:** Java (con Spring Boot), aplicando Domain-Driven Design (DDD), arquitectura limpia y uso de DTOs (Data Transfer Objects) para desacoplar las capas de negocio.
+- **Frontend:** React, con componentes reactivos, tipado estricto en TypeScript y una interfaz interactiva de alta fluidez.
+- **Rendimiento:** Optimizado estrictamente para garantizar **baja latencia** en el procesamiento, armado de estructuras XML, firma criptográfica y comunicación transaccional.
 
-## API
+### 3. Abstracciones y Modelado de Reglas Fiscales (Backend)
+El sistema debe estructurar clases, entidades y servicios que reflejen las siguientes abstracciones tributarias colombianas:
+- **Tipos de Regímenes / Contribuyentes:** 
+  - Responsables de IVA (Régimen Ordinario).
+  - No Responsables de IVA.
+  - Contribuyentes del Régimen Simple de Tributación (RST).
+- **Cálculos y Capas Impositivas:**
+  - Impuesto sobre las Ventas (IVA) con manejo de tarifas (general, reducida, exenta, excluida).
+  - Impuesto de Industria y Comercio (ICA) parametrizable por municipio/actividad económica.
+  - Retenciones en la fuente (Retefuente a título de Renta, ReteIVA, ReteICA).
+  - Descuentos comerciales (condicionados e incondicionados) aplicados antes o después de impuestos según la norma.
+- **Documentos Electrónicos y Seguridad:**
+  - Emisión de Factura Electrónica de Venta, Nota Crédito y Nota Débito vinculadas mediante el **CUFE** (Código Único de Factura Electrónica) y **CUDE**.
+  - Generación de **Firma Digital (XML firmado)** mediante certificados X.509 válidos para los requerimientos de seguridad de la DIAN.
+- **Integraciones:**
+  - Envío automático de documentos al servicio de validación previa de la DIAN.
+  - Envío automatizado de copia de cortesía por correo electrónico al adquiriente (incluyendo adjuntos XML y representación gráfica PDF).
 
-Full contract in [`docs/superpowers/specs/2026-10-02-barniz-express-backend-design.md`](docs/superpowers/specs/2026-10-02-barniz-express-backend-design.md).
-Routes: `POST /api/v1/auth/login`, `GET /api/v1/products`, `GET /api/v1/options`, `POST /api/v1/quotes`.
-Tokens expire after 24 hours.
+### 4. Interfaz de Usuario y Experiencia (Frontend)
+- **Formulario Dinámico:** Módulo interactivo que active o desactive capas impositivas, retenciones y tipos de notas según el régimen del emisor y el adquirente.
+- **Vista Previa en Tiempo Real:** Generación concurrente de la representación gráfica (PDF) y previsualización del esquema XML estructurado.
+- **Diseño UI/UX:**
+  - Estética formal e institucional.
+  - Paleta de colores: **Azul oscuro** para contenedores principales y bordes; **Blanco** para los espacios de contenido general.
+  - Tipografía predominantemente en **negro** para asegurar una legibilidad impecable.
 
-## Run
-
-Requires Java 21 and Maven.
-
-Backend:
-
-```bash
-mvn test
-mvn spring-boot:run   # http://localhost:8080
-```
-
-Frontend (Node 20+, in a second terminal, with the backend running):
-
-```bash
-npm install
-npm run dev           # http://localhost:5173
-```
-
-The frontend signs in with the demo user (`demo` / `demo123`) automatically. `VITE_API_URL` in `.env` points it at the backend.
-
-## Status
-
-- [x] Domain layer: shipment core and the five decorators, with unit tests
-- [x] Application service, REST controllers, JWT login, CORS
-- [x] Custom annotations (`@AuditedQuote`, `@ValidGiftMessage`, `@SafeText`)
-- [x] Frontend (Vite + React + Tailwind): quote workspace with nested layers that mirror the decorator chain
