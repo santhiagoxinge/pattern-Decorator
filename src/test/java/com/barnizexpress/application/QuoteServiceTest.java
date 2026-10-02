@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.barnizexpress.domain.OptionCode;
 import com.barnizexpress.domain.Product;
+import com.barnizexpress.domain.DomesticShipmentFactory;
+import com.barnizexpress.domain.InternationalShipmentFactory;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -16,7 +18,11 @@ class QuoteServiceTest {
     private static final Product TRAY =
             new Product("tray-giralda", "Tray", "", 185000L, 2.5, "/images/tray-giralda.jpg");
 
-    private final QuoteService service = new QuoteService(new FakeProductRepository(TRAY));
+    private final QuoteService service =
+            new QuoteService(
+                    new FakeProductRepository(TRAY),
+                    new ShipmentFactoryProvider(
+                            List.of(new DomesticShipmentFactory(), new InternationalShipmentFactory())));
 
     @Test
     @DisplayName("quotes a domestic shipment with no options")
@@ -257,7 +263,14 @@ class QuoteServiceTest {
 
     private static QuoteCommand command(
             String city, String country, Long declaredValue, List<String> options, String giftMessage) {
-        return new QuoteCommand(TRAY.id(), city, country, declaredValue, options, giftMessage);
+        return QuoteCommand.builder()
+                .productId(TRAY.id())
+                .city(city)
+                .country(country)
+                .declaredValueCop(declaredValue)
+                .options(options)
+                .giftMessage(giftMessage)
+                .build();
     }
 
     private record FakeProductRepository(Product product) implements ProductRepository {

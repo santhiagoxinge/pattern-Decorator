@@ -39,12 +39,13 @@ public class QuoteController {
     @PostMapping
     public QuoteResult quote(@Valid @RequestBody QuoteRequest request) {
         return quoteService.quote(
-                new QuoteCommand(
-                        request.productId(),
-                        request.destination().city(),
-                        request.destination().country(),
-                        request.declaredValueCop(),
-                        request.options(),
-                        request.giftMessage()));
+                QuoteCommand.builder()
+                        .productId(request.productId())
+                        .city(request.destination().city())
+                        .country(request.destination().country())
+                        .declaredValueCop(request.declaredValueCop())
+                        .options(request.options())
+                        .giftMessage(request.giftMessage())
+                        .build());
     }
 }

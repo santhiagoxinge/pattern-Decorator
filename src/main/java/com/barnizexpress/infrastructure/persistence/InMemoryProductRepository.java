@@ -43,11 +43,14 @@ public class InMemoryProductRepository implements ProductRepository {
 
     @Override
     public Optional<Product> findById(String id) {
-        return products.stream().filter(product -> product.id().equals(id)).findFirst();
+        return products.stream()
+                .filter(product -> product.id().equals(id))
+                .findFirst()
+                .map(Product::copy);
     }
 
     @Override
     public List<Product> findAll() {
-        return products;
+        return products.stream().map(Product::copy).toList();
     }
 }

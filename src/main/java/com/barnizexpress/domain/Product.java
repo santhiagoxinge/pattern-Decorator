@@ -7,5 +7,10 @@ public record Product(
         String description,
         long basePriceCop,
         double weightKg,
-        String imageUrl) {
+        String imageUrl) implements Prototype<Product> {
+
+    @Override
+    public Product copy() {
+        return new Product(id, name, description, basePriceCop, weightKg, imageUrl);
+    }
 }

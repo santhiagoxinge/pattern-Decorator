@@ -1,14 +1,9 @@
 package com.barnizexpress.application;
 
-import com.barnizexpress.domain.BaseShipment;
-import com.barnizexpress.domain.CustomsDecorator;
-import com.barnizexpress.domain.ExpressDecorator;
-import com.barnizexpress.domain.FragilePackagingDecorator;
-import com.barnizexpress.domain.GiftWrapDecorator;
-import com.barnizexpress.domain.InsuranceDecorator;
 import com.barnizexpress.domain.OptionCode;
 import com.barnizexpress.domain.Product;
 import com.barnizexpress.domain.Shipment;
+import com.barnizexpress.domain.ShipmentFactory;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -35,9 +30,12 @@ public class QuoteService {
                     OptionCode.EXPRESS);
 
     private final ProductRepository productRepository;
+    private final ShipmentFactoryProvider shipmentFactoryProvider;
 
-    public QuoteService(ProductRepository productRepository) {
+    public QuoteService(
+            ProductRepository productRepository, ShipmentFactoryProvider shipmentFactoryProvider) {
         this.productRepository = productRepository;
+        this.shipmentFactoryProvider = shipmentFactoryProvider;
     }
 
     @AuditedQuote
@@ -46,14 +44,20 @@ public class QuoteService {
         validateDestination(command);
         validateDeclaredValue(command.declaredValueCop());
 
+        ShipmentFactory shipmentFactory = shipmentFactoryProvider.forDestination(command.country());
         Set<OptionCode> requested = parseOptions(command.options());
-        validateOptionCombination(requested, command);
+        validateOptionCombination(requested, command, shipmentFactory);
 
         long declaredValueCop =
                 command.declaredValueCop() == null ? product.basePriceCop() : command.declaredValueCop();
 
-        Shipment shipment = wrap(new BaseShipment(product, command.city(), command.country()),
-                requested, declaredValueCop, command.giftMessage());
+        Shipment shipment =
+                wrap(
+                        shipmentFactory.createBaseShipment(product, command.city(), command.country()),
+                        shipmentFactory,
+                        requested,
+                        declaredValueCop,
+                        command.giftMessage());
 
         return new QuoteResult(
                 QuoteResult.CURRENCY,
@@ -64,20 +68,19 @@ public class QuoteService {
     }
 
     private Shipment wrap(
-            Shipment base, Set<OptionCode> requested, long declaredValueCop, String giftMessage) {
+            Shipment base,
+            ShipmentFactory shipmentFactory,
+            Set<OptionCode> requested,
+            long declaredValueCop,
+            String giftMessage) {
         Shipment shipment = base;
         for (OptionCode option : WRAPPING_ORDER) {
             if (!requested.contains(option)) {
                 continue;
             }
             shipment =
-                    switch (option) {
-                        case FRAGILE -> new FragilePackagingDecorator(shipment);
-                        case INSURANCE -> new InsuranceDecorator(shipment, declaredValueCop);
-                        case CUSTOMS -> new CustomsDecorator(shipment);
-                        case GIFT -> new GiftWrapDecorator(shipment, giftMessage.trim());
-                        case EXPRESS -> new ExpressDecorator(shipment);
-                    };
+                    shipmentFactory.createDecorator(
+                            option, shipment, declaredValueCop, giftMessage);
         }
         return shipment;
     }
@@ -114,7 +117,8 @@ public class QuoteService {
         return options;
     }
 
-    private void validateOptionCombination(Set<OptionCode> requested, QuoteCommand command) {
+    private void validateOptionCombination(
+            Set<OptionCode> requested, QuoteCommand command, ShipmentFactory shipmentFactory) {
         for (OptionCode option : requested) {
             if (option.incompatibleWith().stream().anyMatch(requested::contains)) {
                 OptionCode other =
@@ -125,24 +129,16 @@ public class QuoteService {
                 throw new InvalidQuoteException(option + " and " + other + " cannot be combined");
             }
         }
-        validateCustomsDestination(requested, command);
+        validateCustomsDestination(requested, shipmentFactory);
         validateGiftMessage(requested, command.giftMessage());
     }
 
-    private void validateCustomsDestination(Set<OptionCode> requested, QuoteCommand command) {
-        if (!requested.contains(OptionCode.CUSTOMS)) {
+    private void validateCustomsDestination(
+            Set<OptionCode> requested, ShipmentFactory shipmentFactory) {
+        if (!requested.contains(OptionCode.CUSTOMS) || shipmentFactory.supports(OptionCode.CUSTOMS)) {
             return;
         }
-        boolean domestic = new BaseShipment(
-                        productRepository
-                                .findById(command.productId())
-                                .orElseThrow(),
-                        command.city(),
-                        command.country())
-                .isDomestic();
-        if (domestic) {
-            throw new InvalidQuoteException("CUSTOMS requires an international destination");
-        }
+        throw new InvalidQuoteException("CUSTOMS requires an international destination");
     }
 
     private void validateGiftMessage(Set<OptionCode> requested, String giftMessage) {

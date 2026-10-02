@@ -1,8 +1,8 @@
 # Barniz Express - Backend Design
 
-Shipping quote API for handcrafted Barniz de Pasto pieces (mopa-mopa lacquer). Demo of the
-**Decorator** pattern: each shipping option wraps the shipment and adds cost, description and notes.
-The frontend (separate teammate) consumes the contract below. Do not change it.
+Shipping quote API for handcrafted Barniz de Pasto pieces (mopa-mopa lacquer). The backend demonstrates
+the **Decorator**, **Builder**, **Abstract Factory**, and **Prototype** patterns. The frontend (separate
+teammate) consumes the contract below. Do not change it.
 
 ## Stack
 Java 21, Spring Boot 3.x, Maven, JUnit 5 + MockMvc, jjwt for tokens, Bean Validation.
@@ -11,10 +11,13 @@ No database: products are seeded in memory. All code, comments, identifiers and 
 ## Architecture (hexagonal)
 ```
 com.barnizexpress
-  domain/        Shipment (interface), BaseShipment, ShipmentDecorator (abstract),
+  domain/        Shipment (interface), ShipmentFactory (abstract factory),
+                 DomesticShipmentFactory, InternationalShipmentFactory,
+                 Prototype (interface), BaseShipment, ShipmentDecorator (abstract),
                  FragilePackagingDecorator, InsuranceDecorator, CustomsDecorator,
                  GiftWrapDecorator, ExpressDecorator, Product, OptionCode, Layer
-  application/   QuoteService, QuoteCommand, ports: ProductRepository, TokenIssuer
+  application/   QuoteService, QuoteCommand (builder), ShipmentFactoryProvider,
+                 ports: ProductRepository, TokenIssuer
   infrastructure/
     web/         AuthController, ProductController, OptionController, QuoteController,
                  dto records, ApiExceptionHandler, CorsConfig, JwtAuthFilter
@@ -25,6 +28,17 @@ com.barnizexpress
 `Shipment` exposes `baseCostCop()`, `totalCostCop()`, `layers()` (list of `Layer(code,label,costCop,notes)`),
 `description()`. A decorator holds a `Shipment` (composition, no inheritance chain) and adds one layer.
 `QuoteService` builds the chain in the fixed order below.
+
+## Creational patterns
+- **Builder:** `QuoteCommand.builder()` assembles a quote request fluently in the web adapter while
+  the record constructor keeps the options collection immutable. The REST request and response schemas
+  remain unchanged.
+- **Abstract Factory:** `ShipmentFactoryProvider` selects the domestic or international factory from
+  the destination. Both create the base shipment and option decorators; only the international family
+  supports customs clearance. `QuoteService` delegates construction to the selected factory.
+- **Prototype:** `Product` implements `Prototype<Product>` and `copy()` creates an equal, independent
+  product instance. The in-memory catalog retains its prototypes and returns copies from repository
+  reads, isolating callers from the catalog's stored instances.
 
 ## Wrapping order (innermost to outermost, fixed)
 BaseShipment -> FRAGILE -> INSURANCE -> CUSTOMS -> GIFT -> EXPRESS
